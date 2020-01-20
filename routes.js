@@ -3,6 +3,11 @@ const express = require('express');
 const uuid = require('uuid');
 const IS_OFFLINE = process.env.NODE_ENV !== 'prod';
 const TRAINERS_TABLE = process.env.TABLE;
+const BUCKET_NAME = process.env.CARD_BUCKET;
+const s3 = new AWS.S3({
+    apiVersion: '2006-03-01', 
+    signatureVersion: 'v4'
+});
 const dynamoDb = IS_OFFLINE === true ?
     new AWS.DynamoDB.DocumentClient({
         region: 'ap-southeast-1',
@@ -10,17 +15,19 @@ const dynamoDb = IS_OFFLINE === true ?
     }) :
     new AWS.DynamoDB.DocumentClient();
 const router = express.Router();
+
 router.get('/trainers', (req, res) => {
     const params = {
         TableName: TRAINERS_TABLE
     };
-    dynamoDb.scan(params, (error, result) => {
-        if (error) {
-            res.status(400).json({ error: 'Error fetching the trainers' });
+    dynamoDb.scan(params, (err, result) => {
+        if (err) {
+            return res.status(400).json({ error: 'Error fetching the trainers' });
         }
         res.json(result.Items);
     });
 });
+
 router.get('/trainers/:id', (req, res) => {
     const id = req.params.id;
     const params = {
@@ -29,8 +36,8 @@ router.get('/trainers/:id', (req, res) => {
             id
         }
     };
-    dynamoDb.get(params, (error, result) => {
-        if (error) {
+    dynamoDb.get(params, (err, result) => {
+        if (err) {
             res.status(400).json({ error: 'Error retrieving Trainer' });
         }
         if (result.Item) {
@@ -40,59 +47,176 @@ router.get('/trainers/:id', (req, res) => {
         }
     });
 });
+
 router.post('/trainers', (req, res) => {
-    const name = req.body.name;
     const id = uuid.v4();
+    // TODO: handle vallidate request and sanitize
+    let {
+        facebookName, 
+        ign, 
+        friendCode, 
+        pokemonList, 
+        pokemonData, 
+        badge, 
+        sourceImage, 
+        cardImage, 
+        battleSeason,
+        remark,
+        status
+    }  = req.body;
+    let createdDate = new Date().toISOString();
+    let updatedDate = new Date().toISOString();
     const params = {
         TableName: TRAINERS_TABLE,
         Item: {
             id,
-            name
+            facebookName,
+            ign,
+            friendCode,
+            pokemonList,
+            pokemonData,
+            badge,
+            sourceImage,
+            cardImage,
+            battleSeason,
+            remark,
+            status,
+            createdDate,
+            updatedDate
         },
     };
-    dynamoDb.put(params, (error) => {
-        if (error) {
-            res.status(400).json({ error: 'Could not create Trainer' });
+
+    dynamoDb.put(params, (err, data) => {
+        if (err) {
+            return res.status(400).json({ error: err.message });
         }
         res.json({
             id,
-            name
+            facebookName,
+            ign
         });
     });
 });
+
 router.delete('/trainers/:id', (req, res) => {
     const id = req.params.id;
+    let status = 0;
+    let updatedDate = new Date().toISOString();
     const params = {
         TableName: TRAINERS_TABLE,
         Key: {
             id
-        }
+        },
+        UpdateExpression: 'set #status = :status, #updatedDate = :updatedDate',
+        ExpressionAttributeNames: { 
+            '#status': 'status', 
+            '#updatedDate': 'updatedDate'
+        },
+        ExpressionAttributeValues: { 
+            ':status': status ,
+            ':updatedDate': updatedDate
+        },
+        ReturnValues: 'UPDATED_NEW'
     };
-    dynamoDb.delete(params, (error) => {
-        if (error) {
+    dynamoDb.update(params, (err) => {
+        if (err) {
             res.status(400).json({ error: 'Could not delete Trainer' });
         }
         res.json({ success: true });
     });
 });
+
 router.put('/trainers', (req, res) => {
     const id = req.body.id;
-    const name = req.body.name;
+    let {
+        facebookName, 
+        ign, 
+        friendCode, 
+        pokemonList, 
+        pokemonData, 
+        badge, 
+        sourceImage, 
+        cardImage, 
+        battleSeason,
+        remark,
+        status,
+    }  = req.body;
+    let updatedDate = new Date().toISOString();
     const params = {
         TableName: TRAINERS_TABLE,
         Key: {
             id
         },
-        UpdateExpression: 'set #name = :name',
-        ExpressionAttributeNames: { '#name': 'name' },
-        ExpressionAttributeValues: { ':name': name },
+        UpdateExpression: `set 
+            #facebookName = :facebookName, 
+            #ign = :ign, 
+            #friendCode = :friendCode,
+            #pokemonData = :pokemonData, 
+            #pokemonList = :pokemonList, 
+            #badge = :badge, 
+            #sourceImage = :sourceImage, 
+            #cardImage = :cardImage, 
+            #battleSeason = :battleSeason,
+            #remark = :remark,
+            #status = :status,
+            #updatedDate = :updatedDate
+            `,
+        ExpressionAttributeNames: { 
+            '#facebookName': 'facebookName', 
+            '#ign' : 'ign', 
+            '#friendCode': 'friendCode', 
+            '#pokemonList': 'pokemonList', 
+            '#pokemonData': 'pokemonData', 
+            '#badge': 'badge', 
+            '#sourceImage': 'sourceImage', 
+            '#cardImage': 'cardImage', 
+            '#battleSeason': 'battleSeason',
+            '#remark': 'remark',
+            '#status': 'status',
+            '#updatedDate': 'updatedDate'
+    
+        },
+        ExpressionAttributeValues: { 
+            ':facebookName': facebookName, 
+            ':ign': ign, 
+            ':friendCode': friendCode, 
+            ':pokemonList': pokemonList, 
+            ':pokemonData': pokemonData, 
+            ':badge': badge, 
+            ':sourceImage': sourceImage, 
+            ':cardImage': cardImage, 
+            ':battleSeason': battleSeason,
+            ':remark': remark,
+            ':status': status,
+            ':updatedDate': updatedDate
+        },
         ReturnValues: "ALL_NEW"
     }
-    dynamoDb.update(params, (error, result) => {
-        if (error) {
+    dynamoDb.update(params, (err, result) => {
+        if (err) {
             res.status(400).json({ error: 'Could not update Trainer' });
         }
         res.json(result.Attributes);
     })
 });
+// signedURL
+router.post('/signedurl', (req, res) => {
+    const fileName = 'card/' + req.body.filename;
+    const fileType = req.body.filetype;
+    const params = {
+        Bucket: BUCKET_NAME,
+        Key: fileName,
+        ContentType: fileType,
+        ACL: 'public-read',
+        Expires: 300
+    }
+    s3.getSignedUrl('putObject', params, (err, url) => {
+        if (err) {
+            res.status(400).json({ error: 'Cannot generate Signed URL' })
+        }
+        res.json({url});
+    })
+    
+});
+
 module.exports = router;

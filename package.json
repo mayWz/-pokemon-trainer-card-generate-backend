@@ -7,7 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "deploy": "npm run clean && npm run build && aws lambda update-function-code --function-name trainers --zip-file fileb://build.zip --publish",
     "clean": "rm build.zip",
-    "build": "zip -r build.zip node_modules index.js app.js routes.js"
+    "build": "zip -r build.zip node_modules index.js app.js routes.js",
+    "dynamodb-local-run": "docker-compose up -d",
+    "create-database": "aws dynamodb create-table --cli-input-json file://trainers-table-model.json --endpoint-url http://localhost:8080",
+    "start": "TABLE='trainers' node app-local"
   },
   "author": "@maywz",
   "license": "ISC",
@@ -16,6 +19,7 @@
     "aws-serverless-express": "^3.3.6",
     "cors": "^2.8.5",
     "express": "^4.17.1",
+    "fs": "0.0.1-security",
     "uuid": "^3.3.3"
   }
 }
