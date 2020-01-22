@@ -1,5 +1,6 @@
 const AWS = require('aws-sdk');
 const express = require('express');
+const Sentry = require("@sentry/node");
 const uuid = require('uuid');
 const IS_OFFLINE = process.env.NODE_ENV !== 'prod';
 const TRAINERS_TABLE = process.env.TABLE;
@@ -15,6 +16,7 @@ const dynamoDb = IS_OFFLINE === true ?
     }) :
     new AWS.DynamoDB.DocumentClient();
 const router = express.Router();
+Sentry.init({ dsn: 'https://06f9a3d6c6b745e197fef322a1d0ad22@sentry.io/1891197' });
 
 router.get('/trainers', (req, res) => {
     const params = {
